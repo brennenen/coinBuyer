@@ -1,0 +1,22 @@
+{
+  "name": "coinbuyer",
+  "version": "1.0.0",
+  "description": "automates coinbase pro btc purchases",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brennenen/coinBuyer.git"
+  },
+  "author": "Brennen Milam",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/brennenen/coinBuyer/issues"
+  },
+  "homepage": "https://github.com/brennenen/coinBuyer#readme",
+  "dependencies": {
+    "axios": "^0.19.0"
+  }
+}
