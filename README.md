@@ -33,6 +33,7 @@ automates coinbase pro btc purchases
     >
     > //mainLogic();
 
+-   note you can specify any cron schedule you wish. a good resource is [crontab.guru](https://crontab.guru/)
 -   launch the job in the background by running "forever start buy.js"
 -   kill the job by running "forever stop buy.js"
 -   it is easiest to run this on a vm to ensure constant uptime
