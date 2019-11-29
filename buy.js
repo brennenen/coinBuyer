@@ -14,6 +14,7 @@ const reg_key = process.env.COINBASE_API_KEY;
 const reg_secret = process.env.COINBASE_API_SECRET;
 const amountToBuy = process.env.AMOUNT_TO_BUY;
 const apiURI = process.env.COINBASE_PRO_API_ENDPOINT;
+const maxFunding = process.env.MAX_FUNDING;
 
 var logFile = fs.createWriteStream("log.txt", { flags: "a" });
 // Or 'w' to truncate the file every time the process starts.
@@ -42,25 +43,28 @@ let btcAccount = null;
 let paymentAccount = null;
 
 //8 am on mondays
-var task = cron.schedule("0 8 * * 1", () => {
-    mainLogic();
-});
+// var task = cron.schedule("0 8 * * 1", () => {
+//     mainLogic();
+// });
 
-task.start();
+// task.start();
 
-// mainLogic();
+mainLogic();
 
 async function mainLogic() {
     await getAccounts();
     if (checkBalance()) {
         //great - lets buy some BTC!
         await buyBTC();
+    } else {
+        console.log(`Not enough USD to buy BTC - ${amountToBuy} requested`);
+    }
+    if (usdAccount.balance < maxFunding) {
+        //we need to fund our account
         //lets ensure that we have enough money for next time
         await fundAccount();
     } else {
-        console.log(`Not enough USD to buy BTC - ${amountToBuy} requested`);
-        //we need to fund our account
-        await fundAccount();
+        console.log(`Max funding of ${maxFunding} has been reached`);
     }
 }
 
