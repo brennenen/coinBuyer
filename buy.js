@@ -7,6 +7,9 @@ const key = process.env.COINBASE_PRO_API_KEY;
 const secret = process.env.COINBASE_PRO_API_SECRET;
 const passphrase = process.env.COINBASE_PRO_API_PASSWORD;
 
+const reg_key = process.env.COINBASE_API_KEY;
+const reg_secret = process.env.COINBASE_API_SECRET;
+
 const amountToBuy = process.env.AMOUNT_TO_BUY;
 
 const apiURI = process.env.COINBASE_PRO_API_ENDPOINT;
@@ -22,11 +25,15 @@ let usdAccount = null;
 let btcAccount = null;
 let paymentAccount = null;
 
+var Client = require("coinbase").Client;
+
+var client = new Client({ apiKey: reg_key, apiSecret: reg_secret });
+
 //start of logic
 getAccounts();
 
 function fundAccount() {
-  authedClient.getPaymentMethods((error, response, data) => {
+  authedClient.getPaymentMethods(async (error, response, data) => {
     if (error) {
       // handle the error
       console.log(error);
@@ -34,31 +41,69 @@ function fundAccount() {
       var accounts = data;
 
       //find the usd account
-      var paymentAccounts = accounts.filter(x => x.currency == "USD");
+      var paymentAccounts = accounts.filter(
+        x => x.currency == "USD" && x.type == "ach_bank_account"
+      );
       if (paymentAccounts != null && paymentAccounts.length > 0) {
         //lets use the first one
         paymentAccount = paymentAccounts[0];
-        console.log(`${paymentAccount.name} payment account found`);
-
-        //dont transfer funds if there is already a pending transaction
-        authedClient.getAccountTransfers(
-          paymentAccount.id,
-          (error, response, data) => {
-            if (error) {
-              // handle the error
-              if (error.response.statusCode == "404")
-                console.log("No pending transfers");
-            } else {
-              //fund it
-            }
-          }
+        console.log(
+          `${paymentAccount.name} - ${paymentAccount.id} payment account found`
         );
+
+        client.getAccounts({}, (err, regaccounts) => {
+          var coinbaseUsdAccounts = regaccounts.filter(
+            x => x.id == usdAccount.id
+          );
+          if (coinbaseUsdAccounts != null && coinbaseUsdAccounts.length > 0) {
+            //just grab the first one for nwo
+            var coinbaseUsdAccount = coinbaseUsdAccounts[0];
+          }
+          coinbaseUsdAccount.getTransactions(null, (err, txns) => {
+            var pendingTransfers = txns.filter(
+              x => x.status == "pending" && x.amount.amount >= amountToBuy
+            );
+            if (pendingTransfers != null && pendingTransfers.length > 0) {
+              console.log(
+                `Pending transfer of: ${pendingTransfers[0].amount.amount}`
+              );
+            } else {
+              console.log("none");
+              scheduleUSDTransfer();
+            }
+          });
+        });
       } else {
         console.log("No payment accounts found");
         return;
       }
     }
   });
+  return;
+}
+
+function scheduleUSDTransfer() {
+  console.log("schedule USD transfer function");
+  //fund it
+  // Schedule Deposit to your Exchange USD account from a configured payment method.
+
+  const depositPaymentParamsUSD = {
+    amount: amountToBuy,
+    currency: "USD",
+    payment_method_id: paymentAccount.id // ach_bank_account
+  };
+
+  authedClient.depositPayment(
+    depositPaymentParamsUSD,
+    (error, response, data) => {
+      if (error) {
+        console.log(error.message);
+      } else {
+        console.log(data);
+      }
+    }
+  );
+
   return;
 }
 
@@ -82,8 +127,6 @@ function getAccounts() {
 
         //check to see if we have enough to preform trade
         if (usdBalance >= amountToBuy) {
-          //great - lets buy some BTC!
-
           // find the active btc wallet
           var btcWallets = accounts.filter(
             x => x.currency == "BTC" && x.active == true
@@ -93,6 +136,8 @@ function getAccounts() {
             //lets use the first one for now
             btcAccount = btcWallets[0];
             console.log(`${btcAccount.name} BTC account found`);
+            //great - lets buy some BTC!
+            buyBTC();
           } else {
             console.log("No active BTC account found");
             return;
@@ -107,5 +152,10 @@ function getAccounts() {
       }
     }
   });
+  return;
+}
+
+function buyBTC() {
+  console.log("buy BTC function");
   return;
 }
