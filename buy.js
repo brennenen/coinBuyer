@@ -65,10 +65,9 @@ function fundAccount() {
             );
             if (pendingTransfers != null && pendingTransfers.length > 0) {
               console.log(
-                `Pending transfer of: ${pendingTransfers[0].amount.amount}`
+                `Pending transfer of: ${pendingTransfers[0].amount.amount} already in progress`
               );
             } else {
-              console.log("none");
               scheduleUSDTransfer();
             }
           });
@@ -157,5 +156,21 @@ function getAccounts() {
 
 function buyBTC() {
   console.log("buy BTC function");
-  return;
+
+  // Buy 1 BTC @ 100 USD
+  const buyParams = {
+    price: amountToBuy, // USD
+    // size: "1", // BTC
+    product_id: "BTC-USD"
+  };
+  authedClient.buy(buyParams, (error, response, data) => {
+    if (error) {
+      console.log(error);
+    } else {
+      console.log(data);
+
+      //we need to fund our account for next time regardless
+      fundAccount();
+    }
+  });
 }
