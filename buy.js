@@ -25,135 +25,53 @@ let usdAccount = null;
 let btcAccount = null;
 let paymentAccount = null;
 
-async function setup() {
-  await getAccounts();
-}
+mainLogic();
 
-setup().then(() => {
-  var hasEnoughMoney = checkBalance();
-  if (hasEnoughMoney) {
+async function mainLogic() {
+  await getAccounts();
+  if (checkBalance()) {
     //great - lets buy some BTC!
-    buyBTC();
+    await buyBTC();
+    //lets ensure that we have enough money for next time
+    await fundAccount();
   } else {
     console.log("Not enough USD to buy BTC");
     //we need to fund our account
-    fundAccount();
+    await fundAccount();
   }
-});
+}
 
-function fundAccount() {
-  authedClient.getPaymentMethods(async (error, response, data) => {
-    if (error) {
-      // handle the error
-      console.log(error);
+async function getAccounts() {
+  try {
+    var accounts = await authedClient.getCoinbaseAccounts();
+
+    //find the active usd wallet
+    var usdAccounts = accounts.filter(
+      x => x.currency == "USD" && x.active == true
+    );
+    if (usdAccounts != null && usdAccounts.length > 0) {
+      //for now just take the first one
+      usdAccount = usdAccounts[0];
+      console.log(`${usdAccount.name} - ${usdAccount.id} USD wallet found`);
     } else {
-      var accounts = data;
-
-      //find the usd account
-      var paymentAccounts = accounts.filter(
-        x => x.currency == "USD" && x.type == "ach_bank_account"
-      );
-      if (paymentAccounts != null && paymentAccounts.length > 0) {
-        //lets use the first one
-        paymentAccount = paymentAccounts[0];
-        console.log(
-          `${paymentAccount.name} - ${paymentAccount.id} payment account found`
-        );
-
-        client.getAccounts({}, (err, regaccounts) => {
-          var coinbaseUsdAccounts = regaccounts.filter(
-            x => x.id == usdAccount.id
-          );
-          if (coinbaseUsdAccounts != null && coinbaseUsdAccounts.length > 0) {
-            //just grab the first one for nwo
-            var coinbaseUsdAccount = coinbaseUsdAccounts[0];
-          }
-          coinbaseUsdAccount.getTransactions(null, (err, txns) => {
-            var pendingTransfers = txns.filter(
-              x => x.status == "pending" && x.amount.amount >= amountToBuy
-            );
-            if (pendingTransfers != null && pendingTransfers.length > 0) {
-              console.log(
-                `Pending transfer of: ${pendingTransfers[0].amount.amount} already in progress`
-              );
-            } else {
-              scheduleUSDTransfer();
-            }
-          });
-        });
-      } else {
-        console.log("No payment accounts found");
-        return;
-      }
+      console.log("No active USD wallet found");
     }
-  });
-  return;
-}
 
-function scheduleUSDTransfer() {
-  console.log("schedule USD transfer function");
-  //fund it
-  // Schedule Deposit to your Exchange USD account from a configured payment method.
+    //find active btc wallet
+    var btcWallets = accounts.filter(
+      x => x.currency == "BTC" && x.active == true
+    );
 
-  const depositPaymentParamsUSD = {
-    amount: amountToBuy,
-    currency: "USD",
-    payment_method_id: paymentAccount.id // ach_bank_account
-  };
-
-  authedClient.depositPayment(
-    depositPaymentParamsUSD,
-    (error, response, data) => {
-      if (error) {
-        console.log(error.message);
-      } else {
-        console.log("Funding scheduled");
-        console.log(data);
-      }
+    if (btcWallets != null && btcWallets.length > 0) {
+      //lets use the first one for now
+      btcAccount = btcWallets[0];
+      console.log(`${btcAccount.name} - ${btcAccount.id} BTC wallet found`);
+    } else {
+      console.log("No active BTC wallet found");
     }
-  );
-
-  return;
-}
-
-function getAccounts() {
-  return new Promise((resolve, reject) => {
-    authedClient.getCoinbaseAccounts((error, response, data) => {
-      if (error) {
-        // handle the error
-        console.log(error);
-        reject();
-      } else {
-        var accounts = data;
-        //find the active usd wallet
-        var usdAccounts = accounts.filter(
-          x => x.currency == "USD" && x.active == true
-        );
-        if (usdAccounts != null && usdAccounts.length > 0) {
-          //for now just take the first one
-          usdAccount = usdAccounts[0];
-          console.log(`${usdAccount.name} USD wallet found`);
-        } else {
-          console.log("No active USD wallet found");
-        }
-
-        //find active btc wallet
-        var btcWallets = accounts.filter(
-          x => x.currency == "BTC" && x.active == true
-        );
-
-        if (btcWallets != null && btcWallets.length > 0) {
-          //lets use the first one for now
-          btcAccount = btcWallets[0];
-          console.log(`${btcAccount.name} BTC wallet found`);
-        } else {
-          console.log("No active BTC wallet found");
-        }
-        if (btcAccount != undefined && usdAccount != undefined) resolve();
-        else reject();
-      }
-    });
-  });
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 function checkBalance() {
@@ -170,23 +88,84 @@ function checkBalance() {
   return returnVal;
 }
 
-function buyBTC() {
-  console.log("buy BTC function");
+async function fundAccount() {
+  try {
+    var paymentMethods = await authedClient.getPaymentMethods();
 
-  // Buy 1 BTC @ 100 USD
-  const buyParams = {
-    price: amountToBuy, // USD
-    // size: "1", // BTC
-    product_id: "BTC-USD"
-  };
-  authedClient.buy(buyParams, (error, response, data) => {
-    if (error) {
-      console.log(error);
+    //find the usd account
+    var paymentAccounts = paymentMethods.filter(
+      x => x.currency == "USD" && x.type == "ach_bank_account"
+    );
+    if (paymentAccounts != null && paymentAccounts.length > 0) {
+      //lets use the first one
+      paymentAccount = paymentAccounts[0];
+      console.log(
+        `${paymentAccount.name} - ${paymentAccount.id} payment account found`
+      );
+
+      client.getAccounts({}, async (err, regaccounts) => {
+        var coinbaseUsdAccounts = regaccounts.filter(
+          x => x.id == usdAccount.id
+        );
+        if (coinbaseUsdAccounts != null && coinbaseUsdAccounts.length > 0) {
+          //just grab the first one for nwo
+          var coinbaseUsdAccount = coinbaseUsdAccounts[0];
+        }
+        coinbaseUsdAccount.getTransactions(null, async (err, txns) => {
+          var pendingTransfers = txns.filter(
+            x => x.status == "pending" && x.amount.amount >= amountToBuy
+          );
+          if (pendingTransfers != null && pendingTransfers.length > 0) {
+            console.log(
+              `Pending transfer of: ${pendingTransfers[0].amount.amount} already in progress`
+            );
+          } else {
+            await scheduleUSDTransfer();
+          }
+        });
+      });
     } else {
-      console.log(data);
-
-      //we need to fund our account for next time regardless
-      fundAccount();
+      console.log("No payment accounts found");
     }
-  });
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+async function scheduleUSDTransfer() {
+  console.log("schedule USD transfer function");
+  try {
+    //fund it
+    // Schedule Deposit to your Exchange USD account from a configured payment method.
+
+    const depositPaymentParamsUSD = {
+      amount: amountToBuy,
+      currency: "USD",
+      payment_method_id: paymentAccount.id // ach_bank_account
+    };
+
+    var result = await authedClient.depositPayment(depositPaymentParamsUSD);
+
+    console.log("Funding scheduled");
+    console.log(result);
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+async function buyBTC() {
+  console.log("buy BTC function");
+  try {
+    // Buy 1 BTC @ 100 USD
+    const buyParams = {
+      price: amountToBuy, // USD
+      // size: "1", // BTC
+      product_id: "BTC-USD"
+    };
+    var result = await authedClient.buy(buyParams);
+    console.log(data);
+    console.log("BTC purchase successfull");
+  } catch (error) {
+    console.log(error);
+  }
 }
