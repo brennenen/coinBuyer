@@ -6,12 +6,9 @@ const publicClient = new CoinbasePro.PublicClient();
 const key = process.env.COINBASE_PRO_API_KEY;
 const secret = process.env.COINBASE_PRO_API_SECRET;
 const passphrase = process.env.COINBASE_PRO_API_PASSWORD;
-
 const reg_key = process.env.COINBASE_API_KEY;
 const reg_secret = process.env.COINBASE_API_SECRET;
-
 const amountToBuy = process.env.AMOUNT_TO_BUY;
-
 const apiURI = process.env.COINBASE_PRO_API_ENDPOINT;
 
 const authedClient = new CoinbasePro.AuthenticatedClient(
@@ -21,16 +18,28 @@ const authedClient = new CoinbasePro.AuthenticatedClient(
   apiURI
 );
 
+var Client = require("coinbase").Client;
+var client = new Client({ apiKey: reg_key, apiSecret: reg_secret });
+
 let usdAccount = null;
 let btcAccount = null;
 let paymentAccount = null;
 
-var Client = require("coinbase").Client;
+async function setup() {
+  await getAccounts();
+}
 
-var client = new Client({ apiKey: reg_key, apiSecret: reg_secret });
-
-//start of logic
-getAccounts();
+setup().then(() => {
+  var hasEnoughMoney = checkBalance();
+  if (hasEnoughMoney) {
+    //great - lets buy some BTC!
+    buyBTC();
+  } else {
+    console.log("Not enough USD to buy BTC");
+    //we need to fund our account
+    fundAccount();
+  }
+});
 
 function fundAccount() {
   authedClient.getPaymentMethods(async (error, response, data) => {
@@ -98,6 +107,7 @@ function scheduleUSDTransfer() {
       if (error) {
         console.log(error.message);
       } else {
+        console.log("Funding scheduled");
         console.log(data);
       }
     }
@@ -107,51 +117,57 @@ function scheduleUSDTransfer() {
 }
 
 function getAccounts() {
-  authedClient.getCoinbaseAccounts((error, response, data) => {
-    if (error) {
-      // handle the error
-      console.log(error);
-    } else {
-      var accounts = data;
-      //find the active usd account
-      var usdAccounts = accounts.filter(
-        x => x.currency == "USD" && x.active == true
-      );
-      if (usdAccounts != null && usdAccounts.length > 0) {
-        //for now just take the first one
-        usdAccount = usdAccounts[0];
-        console.log(`${usdAccount.name} USD account found`);
-        var usdBalance = usdAccount.balance;
-        console.log(`${usdBalance} USD available`);
-
-        //check to see if we have enough to preform trade
-        if (usdBalance >= amountToBuy) {
-          // find the active btc wallet
-          var btcWallets = accounts.filter(
-            x => x.currency == "BTC" && x.active == true
-          );
-
-          if (btcWallets != null && btcWallets.length > 0) {
-            //lets use the first one for now
-            btcAccount = btcWallets[0];
-            console.log(`${btcAccount.name} BTC account found`);
-            //great - lets buy some BTC!
-            buyBTC();
-          } else {
-            console.log("No active BTC account found");
-            return;
-          }
-        } else {
-          console.log("Not enough USD to buy BTC");
-          //we need to fund our account
-          fundAccount();
-        }
+  return new Promise((resolve, reject) => {
+    authedClient.getCoinbaseAccounts((error, response, data) => {
+      if (error) {
+        // handle the error
+        console.log(error);
+        reject();
       } else {
-        console.log("No USD accounts found");
+        var accounts = data;
+        //find the active usd wallet
+        var usdAccounts = accounts.filter(
+          x => x.currency == "USD" && x.active == true
+        );
+        if (usdAccounts != null && usdAccounts.length > 0) {
+          //for now just take the first one
+          usdAccount = usdAccounts[0];
+          console.log(`${usdAccount.name} USD wallet found`);
+        } else {
+          console.log("No active USD wallet found");
+        }
+
+        //find active btc wallet
+        var btcWallets = accounts.filter(
+          x => x.currency == "BTC" && x.active == true
+        );
+
+        if (btcWallets != null && btcWallets.length > 0) {
+          //lets use the first one for now
+          btcAccount = btcWallets[0];
+          console.log(`${btcAccount.name} BTC wallet found`);
+        } else {
+          console.log("No active BTC wallet found");
+        }
+        if (btcAccount != undefined && usdAccount != undefined) resolve();
+        else reject();
       }
-    }
+    });
   });
-  return;
+}
+
+function checkBalance() {
+  var returnVal = false;
+  if (usdAccount != null) {
+    var usdBalance = usdAccount.balance;
+    console.log(`${usdBalance} USD available`);
+
+    //check to see if we have enough to preform trade
+    if (usdBalance >= amountToBuy) {
+      returnVal = true;
+    }
+  }
+  return returnVal;
 }
 
 function buyBTC() {
