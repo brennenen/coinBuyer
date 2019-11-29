@@ -1,4 +1,8 @@
 require("dotenv").config();
+const cron = require("node-cron");
+
+var fs = require("fs");
+var util = require("util");
 
 const CoinbasePro = require("coinbase-pro");
 const publicClient = new CoinbasePro.PublicClient();
@@ -11,6 +15,17 @@ const reg_secret = process.env.COINBASE_API_SECRET;
 const amountToBuy = process.env.AMOUNT_TO_BUY;
 const apiURI = process.env.COINBASE_PRO_API_ENDPOINT;
 
+var logFile = fs.createWriteStream("log.txt", { flags: "a" });
+// Or 'w' to truncate the file every time the process starts.
+var logStdout = process.stdout;
+
+console.log = function() {
+    logFile.write(util.format.apply(null, arguments) + "\n");
+    logStdout.write(util.format.apply(null, arguments) + "\n");
+};
+console.error = console.log;
+
+//coinbase pro
 const authedClient = new CoinbasePro.AuthenticatedClient(
     key,
     secret,
@@ -18,6 +33,7 @@ const authedClient = new CoinbasePro.AuthenticatedClient(
     apiURI
 );
 
+//coinbase regular
 var Client = require("coinbase").Client;
 var client = new Client({ apiKey: reg_key, apiSecret: reg_secret });
 
@@ -25,7 +41,14 @@ let usdAccount = null;
 let btcAccount = null;
 let paymentAccount = null;
 
-mainLogic();
+//8 am on mondays
+var task = cron.schedule("0 8 * * 1", () => {
+    mainLogic();
+});
+
+task.start();
+
+// mainLogic();
 
 async function mainLogic() {
     await getAccounts();
@@ -35,7 +58,7 @@ async function mainLogic() {
         //lets ensure that we have enough money for next time
         await fundAccount();
     } else {
-        console.log("Not enough USD to buy BTC");
+        console.log(`Not enough USD to buy BTC - ${amountToBuy} requested`);
         //we need to fund our account
         await fundAccount();
     }
@@ -49,7 +72,7 @@ async function getAccounts() {
         var usdAccounts = accounts.filter(
             x => x.currency == "USD" && x.active == true
         );
-        if (usdAccounts != null && usdAccounts.length > 0) {
+        if (usdAccounts != undefined && usdAccounts.length > 0) {
             //for now just take the first one
             usdAccount = usdAccounts[0];
             console.log(
@@ -64,7 +87,7 @@ async function getAccounts() {
             x => x.currency == "BTC" && x.active == true
         );
 
-        if (btcWallets != null && btcWallets.length > 0) {
+        if (btcWallets != undefined && btcWallets.length > 0) {
             //lets use the first one for now
             btcAccount = btcWallets[0];
             console.log(
@@ -80,7 +103,7 @@ async function getAccounts() {
 
 function checkBalance() {
     var returnVal = false;
-    if (usdAccount != null) {
+    if (usdAccount != undefined) {
         var usdBalance = usdAccount.balance;
         console.log(`${usdBalance} USD available`);
 
@@ -100,7 +123,7 @@ async function fundAccount() {
         var paymentAccounts = paymentMethods.filter(
             x => x.currency == "USD" && x.type == "ach_bank_account"
         );
-        if (paymentAccounts != null && paymentAccounts.length > 0) {
+        if (paymentAccounts != undefined && paymentAccounts.length > 0) {
             //lets use the first one
             paymentAccount = paymentAccounts[0];
             console.log(
@@ -112,7 +135,7 @@ async function fundAccount() {
                     x => x.id == usdAccount.id
                 );
                 if (
-                    coinbaseUsdAccounts != null &&
+                    coinbaseUsdAccounts != undefined &&
                     coinbaseUsdAccounts.length > 0
                 ) {
                     //just grab the first one for nwo
@@ -126,10 +149,11 @@ async function fundAccount() {
                     );
                     if (
                         pendingTransfers != null &&
+                        pendingTransfers != undefined &&
                         pendingTransfers.length > 0
                     ) {
                         console.log(
-                            `Pending transfer of: ${pendingTransfers[0].amount.amount} already in progress`
+                            `Pending transfer of ${pendingTransfers[0].amount.amount} already in progress`
                         );
                     } else {
                         await scheduleUSDTransfer();
