@@ -42,8 +42,10 @@ let usdAccount = null;
 let btcAccount = null;
 let paymentAccount = null;
 
-//8 am on mondays
-// var task = cron.schedule("0 8 * * 1", () => {
+var date = new Date();
+
+//9 am on everyday
+// var task = cron.schedule("0 9 * * *", () => {
 //     mainLogic();
 // });
 
@@ -52,6 +54,7 @@ let paymentAccount = null;
 mainLogic();
 
 async function mainLogic() {
+    console.log(`---- Run Started : ${date} ----`);
     await getAccounts();
     if (checkBalance()) {
         //great - lets buy some BTC!
@@ -70,33 +73,26 @@ async function mainLogic() {
 
 async function getAccounts() {
     try {
-        var accounts = await authedClient.getCoinbaseAccounts();
+        var accounts = await authedClient.getAccounts();
 
+        // console.log(accounts.filter(x => x.balance > 0));
         //find the active usd wallet
-        var usdAccounts = accounts.filter(
-            x => x.currency == "USD" && x.active == true
-        );
+        var usdAccounts = accounts.filter(x => x.currency == "USD");
         if (usdAccounts != undefined && usdAccounts.length > 0) {
             //for now just take the first one
             usdAccount = usdAccounts[0];
-            console.log(
-                `${usdAccount.name} - ${usdAccount.id} USD wallet found`
-            );
+            console.log(`${usdAccount.id} USD wallet found`);
         } else {
             console.log("No active USD wallet found");
         }
 
         //find active btc wallet
-        var btcWallets = accounts.filter(
-            x => x.currency == "BTC" && x.active == true
-        );
+        var btcWallets = accounts.filter(x => x.currency == "BTC");
 
         if (btcWallets != undefined && btcWallets.length > 0) {
             //lets use the first one for now
             btcAccount = btcWallets[0];
-            console.log(
-                `${btcAccount.name} - ${btcAccount.id} BTC wallet found`
-            );
+            console.log(`${btcAccount.id} BTC wallet found`);
         } else {
             console.log("No active BTC wallet found");
         }
@@ -196,14 +192,17 @@ async function scheduleUSDTransfer() {
 async function buyBTC() {
     console.log("buy BTC function");
     try {
+        var btcPrice = await publicClient.getProductTicker("BTC-USD");
+
         // Buy 1 BTC @ 100 USD
         const buyParams = {
             price: amountToBuy, // USD
-            // size: "1", // BTC
+            side: "buy",
+            size: btcPrice.size, // BTC
             product_id: "BTC-USD",
         };
-        var result = await authedClient.buy(buyParams);
-        console.log(data);
+        var result = await authedClient.placeOrder(buyParams);
+        console.log(result);
         console.log("BTC purchase successfull");
     } catch (error) {
         console.log(error);
