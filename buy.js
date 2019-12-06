@@ -194,12 +194,17 @@ async function buyBTC() {
     try {
         var btcPrice = await publicClient.getProductTicker("BTC-USD");
 
+        // console.log(btcPrice);
+        var amountOfBtcToBuy = amountToBuy / btcPrice.price;
+        amountOfBtcToBuy = roundDown(amountOfBtcToBuy.toFixed(8), 8);
+        console.log(amountOfBtcToBuy);
+
         // Buy 1 BTC @ 100 USD
         const buyParams = {
-            price: amountToBuy, // USD
-            side: "buy",
-            size: btcPrice.size, // BTC
+            price: btcPrice.price, // USD
+            size: amountOfBtcToBuy, // BTC
             product_id: "BTC-USD",
+            side: "buy",
         };
         var result = await authedClient.placeOrder(buyParams);
         console.log(result);
@@ -207,4 +212,9 @@ async function buyBTC() {
     } catch (error) {
         console.log(error);
     }
+}
+
+function roundDown(number, decimals) {
+    decimals = decimals || 0;
+    return Math.floor(number * Math.pow(10, decimals)) / Math.pow(10, decimals);
 }
