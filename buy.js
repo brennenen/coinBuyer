@@ -15,6 +15,7 @@ const reg_secret = process.env.COINBASE_API_SECRET;
 const amountToBuy = process.env.AMOUNT_TO_BUY;
 const apiURI = process.env.COINBASE_PRO_API_ENDPOINT;
 const maxFunding = process.env.MAX_FUNDING;
+const amountToFund = process.env.AMOUNT_TO_FUND;
 
 var logFile = fs.createWriteStream("log.txt", { flags: "a" });
 // Or 'w' to truncate the file every time the process starts.
@@ -62,6 +63,8 @@ async function mainLogic() {
     } else {
         console.log(`Not enough USD to buy BTC - ${amountToBuy} requested`);
     }
+    // console.log(usdAccount.balance);
+    // console.log(maxFunding);
     if (usdAccount.balance < maxFunding) {
         //we need to fund our account
         //lets ensure that we have enough money for next time
@@ -73,7 +76,7 @@ async function mainLogic() {
 
 async function getAccounts() {
     try {
-        var accounts = await authedClient.getAccounts();
+        var accounts = await authedClient.getCoinbaseAccounts();
 
         // console.log(accounts.filter(x => x.balance > 0));
         //find the active usd wallet
@@ -145,7 +148,7 @@ async function fundAccount() {
                     var pendingTransfers = txns.filter(
                         x =>
                             x.status == "pending" &&
-                            x.amount.amount >= amountToBuy
+                            x.amount.amount >= amountToFund
                     );
                     if (
                         pendingTransfers != null &&
@@ -175,7 +178,7 @@ async function scheduleUSDTransfer() {
         // Schedule Deposit to your Exchange USD account from a configured payment method.
 
         const depositPaymentParamsUSD = {
-            amount: amountToBuy,
+            amount: amountToFund,
             currency: "USD",
             payment_method_id: paymentAccount.id, // ach_bank_account
         };
@@ -210,7 +213,7 @@ async function buyBTC() {
         console.log(result);
         console.log("BTC purchase successfull");
     } catch (error) {
-        console.log(error);
+        console.log(error.response.body);
     }
 }
 
